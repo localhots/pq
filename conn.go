@@ -940,6 +940,16 @@ func (cn *conn) recvMessage(r *readBuf) (byte, error) {
 	// read the type and length of the message that follows
 	t := x[0]
 	n := int(binary.BigEndian.Uint32(x[1:])) - 4
+
+	// XXX: Bogus allocation trap
+	if n > 1<<30 {
+		return 0, AllocError{
+			Type:        t,
+			LengthBytes: x[1:5],
+			Length:      n,
+		}
+	}
+
 	var y []byte
 	if n <= len(cn.scratch) {
 		y = cn.scratch[:n]
@@ -1812,4 +1822,17 @@ func alnumLowerASCII(ch rune) rune {
 		return ch
 	}
 	return -1 // discard
+}
+
+// AllocError is used to describe allocation error details.
+type AllocError struct {
+	Type        byte
+	LengthBytes []byte
+	Length      int
+}
+
+// Error implements the error interface.
+func (e AllocError) Error() string {
+	return fmt.Sprintf("Attempted to allocate too much memory for type %x: %d bytes (%v)",
+		e.Type, e.Length, e.LengthBytes)
 }
